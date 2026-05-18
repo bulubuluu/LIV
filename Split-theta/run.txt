@@ -1,0 +1,17 @@
+cd /eos/user/y/yzhang4/LIV/LO/
+source venv/bin/activate
+cd -
+
+
+# here the theta is 
+# self.THETA = theta_tx + theta_ty + theta_xy + theta_xz + theta_yz
+# Remember check the "result" directory 
+
+python3 bsm_nc_module.py theta_tx_scale theta_ty_scale theta_xy_scale theta_xz_scale theta_yz_scale
+
+# and then 
+hadd total.root *
+
+# path
+/eos/user/y/yzhang4/LIV/Split-theta/theta-split-5/bsm_nc_module.py
+
