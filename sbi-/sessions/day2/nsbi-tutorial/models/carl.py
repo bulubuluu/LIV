@@ -75,6 +75,39 @@ class CARL(L.LightningModule):
         loss = (self.loss_fn(y_hat, y) * w).sum() / w.sum()
         self.log("val_loss", loss, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
         return loss
+
+
+    # # Here we add assertions to check that the predicted probabilities are in the range [0, 1].
+    # def training_step(self, batch, batch_idx):
+    #     x, y, w = batch
+    #     y_hat = self.model(x).flatten()
+
+    #     if batch_idx == 0:
+    #         print("train y_hat min =", y_hat.min().item())
+    #         print("train y_hat max =", y_hat.max().item())
+    #         assert torch.all(y_hat >= 0.0) and torch.all(y_hat <= 1.0), "train y_hat outside [0, 1]"
+
+    #     y = y.flatten()
+    #     w = w.flatten()
+    #     loss = (self.loss_fn(y_hat, y) * w).sum() / w.sum()
+    #     self.log("train_loss", loss, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
+    #     return loss
+
+    # def validation_step(self, batch, batch_idx):
+    #     x, y, w = batch
+    #     y_hat = self.model(x).flatten()
+
+    #     if batch_idx == 0:
+    #         print("val y_hat min =", y_hat.min().item())
+    #         print("val y_hat max =", y_hat.max().item())
+    #         assert torch.all(y_hat >= 0.0) and torch.all(y_hat <= 1.0), "val y_hat outside [0, 1]"
+
+    #     y = y.flatten()
+    #     w = w.flatten()
+    #     loss = (self.loss_fn(y_hat, y) * w).sum() / w.sum()
+    #     self.log("val_loss", loss, on_step=False, on_epoch=True, prog_bar=True, sync_dist=True)
+    #     return loss
+
     
     def predict_step(self, batch, batch_idx):
         x = batch if not isinstance(batch, (tuple, list)) else batch[0]

@@ -27,7 +27,10 @@ class RootProcess:
                 self.weights,
                 train_size=train_size / total_size,
                 test_size=(val_size + test_size) / total_size,
-                shuffle=False,
+                # shuffle=False,
+                shuffle=True,
+                random_state=42,
+
             )
 
             X_val, X_test, w_val, w_test = train_test_split(
@@ -35,7 +38,9 @@ class RootProcess:
                 w_tmp,
                 train_size=val_size / (val_size + test_size),
                 test_size=test_size / (val_size + test_size),
-                shuffle=False,
+                # shuffle=False,
+                shuffle=True,
+                random_state=42,
             )
 
             total_wsum = self.weights.sum()
@@ -55,7 +60,9 @@ class RootProcess:
             self.weights,
             train_size=train_size / total_size,
             test_size=val_size / total_size,
-            shuffle=False,
+            # shuffle=False,
+            shuffle=True,
+            random_state=42,
         )
 
         total_wsum = self.weights.sum()
@@ -68,6 +75,7 @@ class RootProcess:
         )
 
 class BalancedDataModule(L.LightningDataModule):
+
 
     def __init__(
         self,
@@ -83,8 +91,10 @@ class BalancedDataModule(L.LightningDataModule):
         super().__init__()
 
         if features is None:
-            features = ['Z1_PT', 'Z1_Eta', 'Z1_Phi', 'Z1_Mass','Z2_PT', 'Z2_Eta', 'Z2_Phi', 'Z2_Mass']
-
+            features = [
+                'Z1_PT', 'Z1_Eta', 'Z1_Phi', 'Z1_Mass',
+                'Z2_PT', 'Z2_Eta', 'Z2_Phi', 'Z2_Mass'
+            ]
 
         self.features = features
         self.numerator_file = numerator_events
@@ -95,55 +105,6 @@ class BalancedDataModule(L.LightningDataModule):
         self.random_state = random_state
         self.data_dir = data_dir
         self.scaler = StandardScaler()
-   
-    # =====================================================
-    # the function is not distinguished Z1 and Z2
-    # =====================================================
-
-    # def load_root_features(self, file_path, tree_name="LHEF", epsilon=1e-12, max_weight=1e6):
-    #     tree = uproot.open(file_path)[tree_name]
-
-    #     pt = tree["Particle.PT"].array()
-    #     eta = tree["Particle.Eta"].array()
-    #     phi = tree["Particle.Phi"].array()
-    #     mass = tree["Particle.M"].array()
-    #     sm_amp = tree["SM_Amplitude"].array()
-    #     nc_amp = tree["NC_Amplitude"].array()
-
-    #     mask = ak.num(pt) > 7
-
-    #     pt3, pt4 = ak.to_numpy(pt[mask][:, 2]), ak.to_numpy(pt[mask][:, 3])
-    #     eta3, eta4 = ak.to_numpy(eta[mask][:, 2]), ak.to_numpy(eta[mask][:, 3])
-    #     phi3, phi4 = ak.to_numpy(phi[mask][:, 2]), ak.to_numpy(phi[mask][:, 3])
-    #     mass3, mass4 = ak.to_numpy(mass[mask][:, 2]), ak.to_numpy(mass[mask][:, 3])
-
-    #     safe_nc_amp = ak.to_numpy(nc_amp[mask])
-    #     safe_sm_amp = ak.to_numpy(sm_amp[mask])
-
-    #     ratio = np.zeros(len(safe_nc_amp))
-    #     nonzero_mask = np.abs(safe_sm_amp) > epsilon
-    #     ratio[nonzero_mask] = safe_nc_amp[nonzero_mask] / safe_sm_amp[nonzero_mask]
-
-    #     sample_weight = 1.0 + ratio
-    #     sample_weight = np.clip(sample_weight, 0, max_weight)
-
-    #     X = np.stack(
-    #         [pt3, eta3, phi3, mass3,
-    #         pt4, eta4, phi4, mass4],
-    #         axis=1,
-    #     )
-
-    #     mask_valid = (
-    #         ~np.isnan(X).any(axis=1)
-    #         & ~np.isinf(X).any(axis=1)
-    #         & ~np.isnan(sample_weight)
-    #         & ~np.isinf(sample_weight)
-    #     )
-
-    #     X = X[mask_valid]
-    #     sample_weight = sample_weight[mask_valid]
-
-    #     return X, sample_weight
 
     # =====================================================
     # use the reconstructed Z1 and Z2 features
@@ -165,10 +126,17 @@ class BalancedDataModule(L.LightningDataModule):
         w = tree["LIV_Weight"].array(library="np")
 
         X = np.stack(
-            [z1_pt, z1_eta, z1_phi, z1_mass,
-            z2_pt, z2_eta, z2_phi, z2_mass],
+            [
+                z1_pt, z1_eta, z1_phi, z1_mass,
+                z2_pt, z2_eta, z2_phi, z2_mass
+            ],
             axis=1,
         )
+        # X = np.stack(
+        #     [z1_pt, z1_eta,
+        #      z2_pt, z2_eta],
+        #     axis=1,
+        # )
 
         valid = (
             ~np.isnan(X).any(axis=1)
@@ -182,14 +150,10 @@ class BalancedDataModule(L.LightningDataModule):
 
         return X, w
 
-
     def prepare_data(self):
         os.makedirs(self.data_dir, exist_ok=True)
         X, W = self.load_root_features(self.numerator_file)
 
-        # 同一批 phase-space 点
-        # denominator = background/reference
-        # numerator   = reweighted target (e.g. SBI)
         events_numerator = RootProcess(
             kinematics=pd.DataFrame(X, columns=self.features),
             weights=pd.Series(W),
@@ -261,14 +225,39 @@ class BalancedDataModule(L.LightningDataModule):
 
             self.testing_data = BalancedDataset(events_numerator_test, events_denominator_test, self.features, scaler = self.scaler, random_state=self.random_state)
 
+    # def train_dataloader(self):
+    #     return DataLoader(self.training_data, batch_size=self.batch_size, num_workers=8)
+
+    # def val_dataloader(self):
+    #     return DataLoader(self.validation_data, batch_size=self.batch_size, num_workers=8)
+
+    # def test_dataloader(self):
+    #     return DataLoader(self.testing_data, batch_size=self.batch_size, num_workers=8)
+
     def train_dataloader(self):
-        return DataLoader(self.training_data, batch_size=self.batch_size, num_workers=8)
+        return DataLoader(
+            self.training_data,
+            batch_size=self.batch_size,
+            shuffle=True,
+            num_workers=8,
+        )
 
     def val_dataloader(self):
-        return DataLoader(self.validation_data, batch_size=self.batch_size, num_workers=8)
+        return DataLoader(
+            self.validation_data,
+            batch_size=self.batch_size,
+            shuffle=False,
+            num_workers=8,
+        )
 
     def test_dataloader(self):
-        return DataLoader(self.testing_data, batch_size=self.batch_size, num_workers=8)
+        return DataLoader(
+            self.testing_data,
+            batch_size=self.batch_size,
+            shuffle=False,
+            num_workers=8,
+        )
+
 
 class BalancedDataset(Dataset):
     def __init__(self, events_numerator = None, events_denominator = None, features = None, scaler = None, random_state = None):
@@ -292,7 +281,8 @@ class BalancedDataset(Dataset):
         if scaler is not None:
             self.X = scaler.transform(self.X)
         
-        self.X, self.s, self.w = shuffle(self.X, self.s, self.w, random_state=random_state)
+        # self.X, self.s, self.w = shuffle(self.X, self.s, self.w, random_state=random_state)
+        self.X, self.s, self.w = shuffle(self.X, self.s, self.w, random_state=42)
     
     def __len__(self):
         return len(self.s)

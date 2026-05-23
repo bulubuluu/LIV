@@ -49,6 +49,17 @@ def add_theta_annotation(ax, theta_text):
         zorder=10
     )
 
+def add_lumi_annotation(ax, lumi_fb):
+    ax.text(
+        1.0, 1.04,
+        f"Normalized to {lumi_fb:g} fb$^{{-1}}$",
+        transform=ax.transAxes,
+        ha='right',
+        va='bottom',
+        fontsize=10,
+        clip_on=False
+    )
+
 def get_auto_range(data, percentile_low=0.1, percentile_high=99.9, show_all=False):
     """Original 1D plot range logic (unchanged)"""
     if len(data) == 0 or not np.any(np.isfinite(data)):
@@ -68,7 +79,9 @@ def get_auto_range(data, percentile_low=0.1, percentile_high=99.9, show_all=Fals
 
 
 def plot_2d_distribution(x_data, y_data, weights, title, xlabel, ylabel, filename,
-                         theta_text, bins=(50, 50), range=None, cmap='viridis'):
+                         theta_text, bins=(50, 50), range=None, cmap='viridis',
+                         show_lumi=False, lumi_fb=None):
+
 
     """2D plot with tight axis ranges """
     fig, ax = plt.subplots(figsize=(8, 6))
@@ -98,6 +111,9 @@ def plot_2d_distribution(x_data, y_data, weights, title, xlabel, ylabel, filenam
     ax.grid(alpha=0.3, linestyle='--')
     
     add_theta_annotation(ax, theta_text)
+    if show_lumi and lumi_fb is not None:
+        add_lumi_annotation(ax, lumi_fb)
+
     fig.tight_layout()
     fig.savefig(filename, dpi=300, bbox_inches='tight')
     plt.close(fig)
@@ -105,9 +121,10 @@ def plot_2d_distribution(x_data, y_data, weights, title, xlabel, ylabel, filenam
 
 
 def plot_weighted_comparison(original_values, weighted_values, weights, title, xlabel, filename,
-                             theta_text, bins=100, range=None, label1="Original", label2="Weighted", 
+                             theta_text, bins=100, range=None, label1="SM", label2="LIV", 
                              color1='blue', color2='red', normalize=False, original_weights=None,
-                             values3=None, weights3=None, label3=None, color3='green'):
+                             values3=None, weights3=None, label3=None, color3='green',
+                             show_lumi=False, lumi_fb=None):
 
     fig, ax = plt.subplots(figsize=(8, 6))
 
@@ -172,6 +189,8 @@ def plot_weighted_comparison(original_values, weighted_values, weights, title, x
     ax.grid(alpha=0.3)
 
     add_theta_annotation(ax, theta_text)
+    if show_lumi and lumi_fb is not None:
+        add_lumi_annotation(ax, lumi_fb)
     fig.tight_layout()
     fig.savefig(filename, dpi=300)
     plt.close(fig)
@@ -207,7 +226,8 @@ def plot_amplitude_scatter(sm_values, nc_values, title, filename, theta_text,
 
 
 def plot_weight_distribution(weights, title, filename, theta_text,
-                             bins=100, color='orange', range=None, normalize=False):
+                             bins=100, color='orange', range=None, normalize=False,
+                             show_lumi=False, lumi_fb=None):
 
     fig, ax = plt.subplots(figsize=(8, 6))
 
@@ -223,6 +243,8 @@ def plot_weight_distribution(weights, title, filename, theta_text,
     ax.grid(alpha=0.3)
 
     add_theta_annotation(ax, theta_text)
+    if show_lumi and lumi_fb is not None:
+        add_lumi_annotation(ax, lumi_fb)
     fig.tight_layout()
     fig.savefig(filename, dpi=300)
     plt.close(fig)
@@ -238,11 +260,12 @@ def plot_nc_over_sm_theta_weighted(
     theta_text,
     bins=100,
     range=None,
-    label1="SM (Asimov-normalized)",
-    label2="BSM (Asimov-normalized)",
+    label1="SM",
+    label2="LIV",
     color1="blue",
     color2="red",
     normalize=False,
+    show_lumi=False, lumi_fb=None
 ):
 
     fig, ax = plt.subplots(figsize=(8, 6))
@@ -286,6 +309,7 @@ def plot_nc_over_sm_theta_weighted(
         weights=bsm_w_val
     )
 
+    ax.set_xlim(-1.5e5, 1.5e5)
     ax.set_title(title, fontsize=14, fontweight='bold')
     ax.set_xlabel(xlabel, fontsize=12)
     ax.set_ylabel('Events', fontsize=12)
@@ -293,6 +317,8 @@ def plot_nc_over_sm_theta_weighted(
     ax.grid(alpha=0.3)
 
     add_theta_annotation(ax, theta_text)
+    if show_lumi and lumi_fb is not None:
+        add_lumi_annotation(ax, lumi_fb)
     fig.tight_layout()
     fig.savefig(filename, dpi=300)
     plt.close(fig)
@@ -447,11 +473,17 @@ def export_extreme_z_quark_momenta_to_pdf(extreme_events, extreme_weights, extre
     print(f"Extreme events (Z + Quark) momentum PDF saved to: {pdf_filename}")
 
 
-def main(input_file, tree_name, theta_tx, theta_ty, theta_xy, theta_xz, theta_yz, output_base='./plots'):
+def main(input_file, tree_name, theta_tx, theta_ty, theta_xy, theta_xz, theta_yz, sigma_b, sigma_sbi0, output_base='./plots'):
     try:
         theta_tag = build_theta_tag(theta_tx, theta_ty, theta_xy, theta_xz, theta_yz)
         theta_text = format_theta_annotation(theta_tx, theta_ty, theta_xy, theta_xz, theta_yz)
         output_dir = os.path.join(output_base, theta_tag)
+
+        output_dir_1d = os.path.join(output_dir, "1D")
+        output_dir_2d = os.path.join(output_dir, "2D")
+        os.makedirs(output_dir_1d, exist_ok=True)
+        os.makedirs(output_dir_2d, exist_ok=True)
+
 
         os.makedirs(output_dir, exist_ok=True)
         print(f"Created output directory: {output_dir}")
@@ -481,8 +513,10 @@ def main(input_file, tree_name, theta_tx, theta_ty, theta_xy, theta_xz, theta_yz
 
         # Asimov-normalized weights
         lumi = 500000.0      # 500 fb^-1 = 500000 pb^-1
-        sigma_b = 0.0104701189
-        sigma_sbi0 = 0.0104739004
+        lumi_fb = 500.0
+
+        # sigma_b = 0.0104701189
+        # sigma_sbi0 = 0.0104739004   # pb
 
         # --------------------------
         # SM Asimov weights
@@ -496,7 +530,7 @@ def main(input_file, tree_name, theta_tx, theta_ty, theta_xy, theta_xz, theta_yz
 
         sm_weights[valid_sm_mask] = (
             sm_weights[valid_sm_mask] / np.sum(sm_weights[valid_sm_mask]) * lumi 
-            # * sigma_b
+            * sigma_b
         )
 
         # --------------------------
@@ -510,7 +544,7 @@ def main(input_file, tree_name, theta_tx, theta_ty, theta_xy, theta_xz, theta_yz
 
         new_weights[finite_weight_mask] = (
             new_weights[finite_weight_mask] / weight_sum * lumi 
-            # * sigma_sbi0
+            * sigma_sbi0
         )
 
         print("SM weights normalized to Asimov yield:")
@@ -544,56 +578,102 @@ def main(input_file, tree_name, theta_tx, theta_ty, theta_xy, theta_xz, theta_yz
         some_array = np.full_like(sm_values, np.nan, dtype=float)
         some_array[valid_sm_mask] = nc_values[valid_sm_mask] / (sm_values[valid_sm_mask] * theta_total)
 
-        plot_nc_over_sm_theta_weighted(
-            var_nc_sm_theta=some_array[valid_sm_mask],
-            sm_weights=sm_weights[valid_sm_mask],
-            bsm_weights=new_weights[valid_sm_mask],
-            title="NC/(SM * Theta) Weighted",
-            xlabel="NC/(SM*theta)",
-            filename=f"{output_dir}/nc_over_sm-multiplied-theta_weighted.png",
-            theta_text=theta_text
-        )
 
         plot_weighted_comparison(
             original_values=sm_values[valid_sm_mask],
             weighted_values=nc_values[valid_sm_mask],
             weights=new_weights[valid_sm_mask],
-            original_weights=sm_weights[valid_sm_mask],
-            values3=sm_values[valid_sm_mask],
+            original_weights=new_weights[valid_sm_mask],
+            values3=1+nc_values[valid_sm_mask]/sm_values[valid_sm_mask],
             weights3=new_weights[valid_sm_mask],
-            label3="(1 + NC/SM)",
+            label3="(1 + NC/SM)-(SM)",
             color3='green',
-            title="SM vs NC Amplitude",
+            title="SM vs NC Amplitude vs (1 + NC/SM) Comparison",
             xlabel="Amplitude Value",
-            filename=f"{output_dir}/amplitude_comparison.png",
+            filename=f"{output_dir_1d}/amplitude_comparison.png",
             theta_text=theta_text,
             bins=100,
-            range=None,
-            label1="SM Amplitude",
-            label2="NC Amplitude",
+            range=(-150, 150),
+            label1="SM Amplitude-(SM)",
+            label2="NC Amplitude-(SM)",
             color1='blue',
             color2='red',
-            normalize=False
+            normalize=False,
+            lumi_fb=lumi_fb,
+            show_lumi=True
         )
+
+        plot_weighted_comparison(
+            original_values=sm_values[valid_sm_mask],
+            weighted_values=sm_values[valid_sm_mask],
+            weights=new_weights[valid_sm_mask],
+            original_weights=sm_weights[valid_sm_mask],
+            title="SM Amplitude",
+            xlabel="SM Amplitude",
+            filename=f"{output_dir_1d}/sm_amplitude_sm_vs_liv.png",
+            theta_text=theta_text,
+            bins=100,
+            range=(-150, 150),
+            label1="SM",
+            label2="LIV",
+            color1='blue',
+            color2='red',
+            normalize=False,
+            lumi_fb=lumi_fb,
+            show_lumi=True
+        )
+
+        plot_weighted_comparison(
+            original_values=nc_values[valid_sm_mask],
+            weighted_values=nc_values[valid_sm_mask],
+            weights=new_weights[valid_sm_mask],
+            original_weights=sm_weights[valid_sm_mask],
+            title="NC Amplitude",
+            xlabel="NC Amplitude",
+            filename=f"{output_dir_1d}/nc_amplitude_sm_vs_liv.png",
+            theta_text=theta_text,
+            bins=100,
+            range=(-150, 150),
+            label1="SM",
+            label2="LIV",
+            color1='blue',
+            color2='red',
+            normalize=False,
+            lumi_fb=lumi_fb,
+            show_lumi=True
+        )
+
+        plot_nc_over_sm_theta_weighted(
+            var_nc_sm_theta=some_array[valid_sm_mask],
+            sm_weights=sm_weights[valid_sm_mask],
+            bsm_weights=new_weights[valid_sm_mask],
+            title="NC/(SM * Theta)",
+            xlabel="NC/(SM*theta)",
+            filename=f"{output_dir_1d}/nc_over_sm_theta_sm_vs_liv.png",
+            theta_text=theta_text,
+            lumi_fb=lumi_fb,
+            show_lumi=True
+        )
+
         print("Amplitude comparison plot generated")
 
-        plot_weight_distribution(
-            weights=new_weights,
-            title="Weight Distribution (1 + NC/SM) - Valid Events",
-            filename=f"{output_dir}/weight_distribution_1+NC_SM.png",
-            bins=100,
-            color='darkorange',
-            range=None,
-            normalize=False,
-            theta_text=theta_text
-        )
-        print("Weight distribution plot generated")
+        # plot_weight_distribution(
+        #     weights=new_weights,
+        #     title="Weight Distribution (1 + NC/SM) - Valid Events",
+        #     filename=f"{output_dir}/weight_distribution_1+NC_SM.png",
+        #     bins=100,
+        #     color='darkorange',
+        #     range=None,
+        #     normalize=False,
+        #     theta_text=theta_text
+        # )
+        # print("Weight distribution plot generated")
 
         plot_amplitude_scatter(
             sm_values=sm_values[valid_sm_mask],
             nc_values=nc_values[valid_sm_mask],
-            title="SM Amplitude vs NC Amplitude (Valid Events)",
-            filename=f"{output_dir}/sm_vs_nc_amplitude_scatter.png",
+            title="SM Amplitude vs NC Amplitude",
+            filename=f"{output_dir_1d}/sm_vs_nc_amplitude_scatter.png",
             theta_text=theta_text,
             alpha=0.5,
             s=5,
@@ -659,25 +739,29 @@ def main(input_file, tree_name, theta_tx, theta_ty, theta_xy, theta_xz, theta_yz
                 x_data=x_data,
                 y_data=y_data,
                 weights=z_sm_weights,
-                title=f"Z Boson {xlabel} vs {ylabel} (Non-weighted)",
+                title=f"Z Boson {xlabel} vs {ylabel} (SM)",
                 xlabel=xlabel,
                 ylabel=ylabel,
-                filename=f"{output_dir}/z_{plot_name}_2d_nonweighted.png",
+                filename=f"{output_dir_2d}/z_{plot_name}_2d_nonweighted.png",
                 bins=(50, 50),
                 theta_text=theta_text,
-                range=tight_range
+                range=tight_range,
+                lumi_fb=lumi_fb,
+                show_lumi=True
             )
             plot_2d_distribution(
                 x_data=x_data,
                 y_data=y_data,
                 weights=z_new_weights,
-                title=f"Z Boson {xlabel} vs {ylabel} (Weighted: 1+NC/SM)",
+                title=f"Z Boson {xlabel} vs {ylabel} (LIV)",
                 xlabel=xlabel,
                 ylabel=ylabel,
-                filename=f"{output_dir}/z_{plot_name}_2d_weighted.png",
+                filename=f"{output_dir_2d}/z_{plot_name}_2d_weighted.png",
                 bins=(50, 50),
                 theta_text=theta_text,
-                range=tight_range
+                range=tight_range,
+                lumi_fb=lumi_fb,
+                show_lumi=True
             )
         print("All 2D distribution plots (tight ranges, no blank areas) generated")
 
@@ -703,15 +787,17 @@ def main(input_file, tree_name, theta_tx, theta_ty, theta_xy, theta_xz, theta_yz
                 original_weights=z_sm_weights[all_z_mask],
                 title=f"Z Boson {var_name} Comparison (All Events)",
                 xlabel=xlabel,
-                filename=f"{output_dir}/z_{var_name.lower()}_comparison_all_events.png",
+                filename=f"{output_dir_1d}/z_{var_name.lower()}_comparison_all_events.png",
                 bins=100,
                 range=None,  # Original 1D range logic
-                label1="SM (Unweighted)",
-                label2="Weighted (1+NC/SM)",
+                label1="SM",
+                label2="LIV",
                 color1='darkblue',
                 color2='crimson',
                 normalize=False,
-                theta_text=theta_text
+                theta_text=theta_text,
+                lumi_fb=lumi_fb,
+                show_lumi=True
             )
         print("All Z boson comparison plots (original 1D settings) generated")
 
@@ -729,15 +815,17 @@ def main(input_file, tree_name, theta_tx, theta_ty, theta_xy, theta_xz, theta_yz
                     original_weights=z_sm_weights[weight_abs_less50_mask],
                     title=f"Z Boson {var_name} Comparison (|Weight| < 50)",
                     xlabel=xlabel,
-                    filename=f"{output_dir}/z_{var_name.lower()}_comparison_abs_weight_less50.png",
+                    filename=f"{output_dir_1d}/z_{var_name.lower()}_comparison_abs_weight_less50.png",
                     bins=100,
                     range=None,
-                    label1="SM (Unweighted)",
-                    label2="Weighted (1+NC/SM)",
+                    label1="SM",
+                    label2="LIV",
                     color1='darkblue',
                     color2='crimson',
                     normalize=False,
-                    theta_text=theta_text
+                    theta_text=theta_text,
+                    lumi_fb=lumi_fb,
+                    show_lumi=True
                 )
             if np.sum(weight_abs_more50_mask) > 0:
                 plot_weighted_comparison(
@@ -747,15 +835,17 @@ def main(input_file, tree_name, theta_tx, theta_ty, theta_xy, theta_xz, theta_yz
                     original_weights=z_sm_weights[weight_abs_more50_mask],
                     title=f"Z Boson {var_name} Comparison (|Weight| > 50)",
                     xlabel=xlabel,
-                    filename=f"{output_dir}/z_{var_name.lower()}_comparison_abs_weight_more50.png",
+                    filename=f"{output_dir_1d}/z_{var_name.lower()}_comparison_abs_weight_more50.png",
                     bins=100,
                     range=None,
-                    label1="SM (Unweighted)",
-                    label2="Weighted (1+NC/SM)",
+                    label1="SM",
+                    label2="LIV",
                     color1='darkblue',
                     color2='crimson',
                     normalize=False,
-                    theta_text=theta_text
+                    theta_text=theta_text,
+                    lumi_fb=lumi_fb,
+                    show_lumi=True
                 )
         print("Z boson comparison plots (|Weight| < 50 and |Weight| > 50) generated")
 
@@ -785,15 +875,17 @@ def main(input_file, tree_name, theta_tx, theta_ty, theta_xy, theta_xz, theta_yz
                     original_weights=z_sm_weights[small_pt_huge_weight_mask],
                     title=f"Z Boson {var_name} - Small pT (<5 GeV) + |Weight|>100",
                     xlabel=xlabel,
-                    filename=f"{output_dir}/z_{var_name.lower()}_small_pt_huge_weights.png",
+                    filename=f"{output_dir_1d}/z_{var_name.lower()}_small_pt_huge_weights.png",
                     bins=100,
                     range=None,
-                    label1="Unweighted (Small pT + |W|>100)",
-                    label2="Weighted (Small pT + |W|>100)",
+                    label1="SM (Small pT + |W|>100)",
+                    label2="LIV (Small pT + |W|>100)",
                     color1='orange',
                     color2='red',
                     normalize=False,
-                    theta_text=theta_text
+                    theta_text=theta_text,
+                    lumi_fb=lumi_fb,
+                    show_lumi=True
                 )
 
             if np.sum(small_pt_normal_weight_mask) > 0:
@@ -804,15 +896,17 @@ def main(input_file, tree_name, theta_tx, theta_ty, theta_xy, theta_xz, theta_yz
                     original_weights=z_sm_weights[small_pt_normal_weight_mask],
                     title=f"Z Boson {var_name} - Small pT (<5 GeV) + |Weight|<=100",
                     xlabel=xlabel,
-                    filename=f"{output_dir}/z_{var_name.lower()}_small_pt_normal_weights.png",
+                    filename=f"{output_dir_1d}/z_{var_name.lower()}_small_pt_normal_weights.png",
                     bins=100,
                     range=None,
-                    label1="Unweighted (Small pT + |W|<=100)",
-                    label2="Weighted (Small pT + |W|<=100)",
+                    label1="SM (Small pT + |W|<=100)",
+                    label2="LIV (Small pT + |W|<=100)",
                     color1='blue',
-                    color2='darkblue',
+                    color2='red',
                     normalize=False,
-                    theta_text=theta_text
+                    theta_text=theta_text,
+                    lumi_fb=lumi_fb,
+                    show_lumi=True
                 )
 
         print("Phi/Eta subset plots for small pT analysis generated")
@@ -837,11 +931,13 @@ def main(input_file, tree_name, theta_tx, theta_ty, theta_xy, theta_xz, theta_yz
                 color='red',
                 range=None,
                 normalize=False,
-                theta_text=theta_text
+                theta_text=theta_text,
+                lumi_fb=lumi_fb,
+                show_lumi=True
             )
             print("Extreme events weight distribution plot generated")
 
-            export_extreme_z_quark_momenta_to_pdf(extreme_events, extreme_weights, extreme_indices, output_dir)
+            export_extreme_z_quark_momenta_to_pdf(extreme_events, extreme_weights, extreme_indices, output_dir_1d)
         else:
             print("No extreme events found (1 + NC/SM > 500)")
 
@@ -855,8 +951,8 @@ def main(input_file, tree_name, theta_tx, theta_ty, theta_xy, theta_xz, theta_yz
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 8:
-        print("Usage: python3 draw_nc_sm_graph.py <input_file> <tree_name> <theta_tx> <theta_ty> <theta_xy> <theta_xz> <theta_yz>")
+    if len(sys.argv) != 10:
+        print("Usage: python3 draw-nc-sm-graph-lumi.py <input_file> <tree_name> <theta_tx> <theta_ty> <theta_xy> <theta_xz> <theta_yz> <sigma_b> <sigma_sbi0>")
         sys.exit(1)
 
     input_file = sys.argv[1]
@@ -866,11 +962,13 @@ if __name__ == "__main__":
     theta_xy = sys.argv[5]
     theta_xz = sys.argv[6]
     theta_yz = sys.argv[7]
+    sigma_b = float(sys.argv[8])
+    sigma_sbi0 = float(sys.argv[9])
+
 
     if not os.path.exists(input_file):
         print(f"Error: Input file '{input_file}' does not exist")
         sys.exit(1)
 
-    main(input_file, tree_name, theta_tx, theta_ty, theta_xy, theta_xz, theta_yz)
-
+    main(input_file, tree_name, theta_tx, theta_ty, theta_xy, theta_xz, theta_yz, sigma_b, sigma_sbi0)
 
