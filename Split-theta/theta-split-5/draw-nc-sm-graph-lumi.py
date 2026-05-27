@@ -519,32 +519,37 @@ def main(input_file, tree_name, theta_tx, theta_ty, theta_xy, theta_xz, theta_yz
         # sigma_sbi0 = 0.0104739004   # pb
 
         # --------------------------
-        # SM Asimov weights
+        # SM weights:
+        # original per-event weight = 1
+        # normalized so that sum(weights) = lumi * sigma_b
         # --------------------------
         sm_weights = np.full_like(sm_values, np.nan, dtype=float)
         sm_weights[valid_sm_mask] = 1.0
 
-        n_valid = np.sum(valid_sm_mask)
-        if n_valid <= 0:
+        if np.sum(valid_sm_mask) <= 0:
             raise ValueError("No valid SM events found for normalization.")
 
+        sm_weight_sum = np.sum(sm_weights[valid_sm_mask])
         sm_weights[valid_sm_mask] = (
-            sm_weights[valid_sm_mask] / np.sum(sm_weights[valid_sm_mask]) * lumi 
-            * sigma_b
+            sm_weights[valid_sm_mask] / sm_weight_sum * lumi * sigma_b
         )
 
         # --------------------------
-        # LIV Asimov weights
+        # LIV weights:
+        # original per-event weight = 1 + NC/SM
+        # normalized so that sum(weights) = lumi * sigma_sbi0
         # --------------------------
         finite_weight_mask = np.isfinite(new_weights)
-        weight_sum = np.sum(new_weights[finite_weight_mask])
 
-        if weight_sum <= 0:
+        if np.sum(finite_weight_mask) <= 0:
+            raise ValueError("No finite LIV weights found.")
+
+        liv_weight_sum = np.sum(new_weights[finite_weight_mask])
+        if liv_weight_sum <= 0:
             raise ValueError("Sum of valid LIV weights is non-positive, cannot normalize.")
 
         new_weights[finite_weight_mask] = (
-            new_weights[finite_weight_mask] / weight_sum * lumi 
-            * sigma_sbi0
+            new_weights[finite_weight_mask] / liv_weight_sum * lumi * sigma_sbi0
         )
 
         print("SM weights normalized to Asimov yield:")
